@@ -105,6 +105,7 @@
 	import Messages from '$lib/components/chat/Messages.svelte';
 	import Navbar from '$lib/components/chat/Navbar.svelte';
 	import ChatControls from './ChatControls.svelte';
+	import WebLabIntervention from './WebLabIntervention.svelte';
 	import EventConfirmDialog from '../common/ConfirmDialog.svelte';
 	import DeleteConfirmDialog from '../common/ConfirmDialog.svelte';
 	import WebSearchConfirmDialog from '../common/ConfirmDialog.svelte';
@@ -2490,7 +2491,13 @@
 	// Chat functions
 	//////////////////////////
 
+	// Web Lab: gives a study the chance to hold this message before it is sent.
+	let weblabIntervention = null;
+
 	const submitPrompt = async (inputContent, inputFiles) => {
+		// Resolves immediately unless a Web Lab study asks this user to wait.
+		await weblabIntervention?.gate($chatId);
+
 		const _files = structuredClone(inputFiles);
 
 		chatFiles.push(
@@ -3675,6 +3682,8 @@
 </svelte:head>
 
 <audio id="audioElement" style="display: none;"></audio>
+
+<WebLabIntervention bind:this={weblabIntervention} />
 
 {#if getChatVariablesForm(selectedModelIds, chatVariables, $models).conflicts.length > 0}
 	<Modal bind:show={showChatVariablesModal} size="md">

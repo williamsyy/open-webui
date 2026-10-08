@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 import uuid
 from collections import Counter
@@ -206,6 +207,35 @@ class ChatMessageModel(BaseModel):
 ####################
 
 
+async def _mirror_to_weblab(message: 'ChatMessage') -> None:
+    """Copy a message's usage into the Web Lab study database.
+
+    The study keeps its own record so its analysis does not depend on chat
+    history surviving.  Failures are swallowed — study bookkeeping must never
+    break someone's chat.
+    """
+    try:
+        from open_webui.weblab.service import record_usage
+
+        # The primary key is '{chat_id}-{message_id}' and both halves are UUIDs
+        # containing dashes, so strip the known prefix rather than splitting.
+        raw_id = message.id or ''
+        prefix = f'{message.chat_id}-'
+        message_id = raw_id[len(prefix):] if raw_id.startswith(prefix) else raw_id
+
+        await record_usage(
+            user_id=message.user_id,
+            chat_id=message.chat_id,
+            message_id=message_id or None,
+            model_id=message.model_id,
+            usage=message.usage,
+            created_at=message.created_at,
+            role=message.role or 'assistant',
+        )
+    except Exception:
+        logging.getLogger(__name__).debug('Web Lab: usage mirror skipped', exc_info=True)
+
+
 class ChatMessageTable:
     async def upsert_message(
         self,
@@ -259,6 +289,7 @@ class ChatMessageTable:
                     existing.usage = existing_usage if usage == existing_usage else merge_usage(existing_usage, usage)
                 existing.updated_at = now
                 await db.commit()
+                await _mirror_to_weblab(existing)
                 return ChatMessageModel.model_validate(existing)
             else:
                 # Insert new
@@ -287,6 +318,7 @@ class ChatMessageTable:
                 )
                 db.add(message)
                 await db.commit()
+                await _mirror_to_weblab(message)
                 return ChatMessageModel.model_validate(message)
 
     async def get_message_by_id(self, id: str, db: Optional[AsyncSession] = None) -> Optional[ChatMessageModel]:

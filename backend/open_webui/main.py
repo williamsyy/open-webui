@@ -206,6 +206,7 @@ from open_webui.utils.asgi_middleware import (
     WebsocketUpgradeGuardMiddleware,
 )
 from open_webui.utils.audit import AuditLevel, AuditLoggingMiddleware
+from open_webui.weblab.router import router as weblab_router
 from open_webui.utils.auth import (
     create_admin_user,
     decode_token,
@@ -370,6 +371,16 @@ async def lifespan(app: FastAPI):
 
     asyncio.create_task(periodic_usage_pool_cleanup())
     asyncio.create_task(periodic_session_pool_cleanup())
+
+    # Web Lab study: its own database, independent of webui.db, plus snapshots.
+    try:
+        from open_webui.weblab.backup import backup_loop
+        from open_webui.weblab.db import init_weblab_db
+
+        await init_weblab_db()
+        asyncio.create_task(backup_loop())
+    except Exception:
+        log.exception('Web Lab: study database failed to start')
 
     from open_webui.utils.automations import scheduler_worker_loop
 
@@ -817,6 +828,7 @@ app.include_router(groups.router, prefix='/api/v1/groups', tags=['groups'])
 app.include_router(files.router, prefix='/api/v1/files', tags=['files'])
 app.include_router(functions.router, prefix='/api/v1/functions', tags=['functions'])
 app.include_router(evaluations.router, prefix='/api/v1/evaluations', tags=['evaluations'])
+app.include_router(weblab_router, prefix='/api/v1/weblab', tags=['weblab'])
 if ENABLE_ADMIN_ANALYTICS:
     app.include_router(analytics.router, prefix='/api/v1/analytics', tags=['analytics'])
 app.include_router(utils.router, prefix='/api/v1/utils', tags=['utils'])

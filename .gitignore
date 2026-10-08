@@ -311,3 +311,7 @@ cypress/videos
 cypress/screenshots
 .vscode/settings.json
 .cptr
+
+# Web Lab study deployment (local config + study data)
+openwebui.env
+data/
